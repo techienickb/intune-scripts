@@ -38,15 +38,17 @@ N/A
 $ErrorActionPreference = "Continue"
 ##Start Logging to %TEMP%\intune.log
 $date = get-date -format ddMMyyyy
-Start-Transcript -Path $env:TEMP\intune-$date.log
+$path = "$($env:TEMP)\intune"
+Start-Transcript -Path "$path\intune-$date.log"
 
 Write-Host "Downloading IntuneWinAppUtil.exe"
 ##IntuneWinAppUtil
 $intuneapputilurl = "https://github.com/microsoft/Microsoft-Win32-Content-Prep-Tool/raw/master/IntuneWinAppUtil.exe"
-$intuneapputiloutput = "$($env:TEMP)\IntuneWinAppUtil.exe"
+$intuneapputiloutput = "$path\IntuneWinAppUtil.exe"
 Invoke-WebRequest -Uri $intuneapputilurl -OutFile $intuneapputiloutput
 
-Connect-MgGraph -Scopes DeviceManagementApps.ReadWrite.All,Group.ReadWrite.All,GroupMember.ReadWrite.All
+Select-MgProfile -Name Beta
+Connect-MgGraph -Scopes DeviceManagementApps.ReadWrite.All,DeviceManagementConfiguration.ReadWrite.All,Group.ReadWrite.All,GroupMember.ReadWrite.All
 
 ###############################################################################################################
 ######                                          Add Functions                                            ######
@@ -127,9 +129,6 @@ Connect-MgGraph -Scopes DeviceManagementApps.ReadWrite.All,Group.ReadWrite.All,G
             $TargetGroupId,
             $InstallIntent
         )
-        
-        $graphApiVersion = "Beta"
-        $Resource = "deviceAppManagement/mobileApps/$ApplicationId/assign"
             
             try {
         
@@ -198,21 +197,6 @@ Connect-MgGraph -Scopes DeviceManagementApps.ReadWrite.All,Group.ReadWrite.All,G
             $formatter.Serialize($stream, $object);
             $stream.Position = 0;
             $formatter.Deserialize($stream);
-        }
-        
-        ####################################################
-        
-        function WriteHeaders($authToken){
-        
-            foreach ($header in $authToken.GetEnumerator())
-            {
-                if ($header.Name.ToLower() -eq "authorization")
-                {
-                    continue;
-                }
-        
-                Write-Host -ForegroundColor Gray "$($header.Name): $($header.Value)";
-            }
         }
         
         ####################################################
@@ -327,7 +311,7 @@ Connect-MgGraph -Scopes DeviceManagementApps.ReadWrite.All,Group.ReadWrite.All,G
         
             finally {
         
-                if ($reader -ne $null) { $reader.Dispose(); }
+                if ($null -ne $reader) { $reader.Dispose(); }
             
             }
             
@@ -342,7 +326,7 @@ Connect-MgGraph -Scopes DeviceManagementApps.ReadWrite.All,Group.ReadWrite.All,G
         
             $renewalUri = "$fileUri/renewUpload";
             $actionBody = "";
-            $rewnewUriResult = MakePostRequest $renewalUri $actionBody;
+            $rewnewUriResult = Invoke-MgGraphRequest -method POST -Uri $renewalUri -Body $actionBody;
             
             $file = WaitForFileProcessing $fileUri "AzureStorageUriRenewal" $azureStorageRenewSasUriBackOffTimeInSeconds;
         
@@ -363,7 +347,7 @@ Connect-MgGraph -Scopes DeviceManagementApps.ReadWrite.All,Group.ReadWrite.All,G
             $file = $null;
             while ($attempts -gt 0)
             {
-                $file = MakeGetRequest $fileUri;
+                $file = Invoke-MgGraphRequest -Method GET -Uri $fileUri;
         
                 if ($file.uploadState -eq $successState)
                 {
@@ -379,7 +363,7 @@ Connect-MgGraph -Scopes DeviceManagementApps.ReadWrite.All,Group.ReadWrite.All,G
                 $attempts--;
             }
         
-            if ($file -eq $null -or $file.uploadState -ne $successState)
+            if ($null -eq $file-or $file.uploadState -ne $successState)
             {
                 throw "File request did not complete in the allotted time.";
             }
@@ -760,7 +744,7 @@ Connect-MgGraph -Scopes DeviceManagementApps.ReadWrite.All,Group.ReadWrite.All,G
         Add-Type -Assembly System.IO.Compression.FileSystem
         $zip = [IO.Compression.ZipFile]::OpenRead("$SourceFile")
         
-            $zip.Entries | where {$_.Name -like "$filename" } | foreach {
+            $zip.Entries | where-object {$_.Name -like "$filename" } | foreach-object {
         
             [System.IO.Compression.ZipFileExtensions]::ExtractToFile($_, "$Directory\$filename", $true)
         
@@ -768,7 +752,7 @@ Connect-MgGraph -Scopes DeviceManagementApps.ReadWrite.All,Group.ReadWrite.All,G
         
         $zip.Dispose()
         
-        [xml]$IntuneWinXML = gc "$Directory\$filename"
+        [xml]$IntuneWinXML = Get-Content "$Directory\$filename"
         
         return $IntuneWinXML
         
@@ -803,7 +787,7 @@ Connect-MgGraph -Scopes DeviceManagementApps.ReadWrite.All,Group.ReadWrite.All,G
             Add-Type -Assembly System.IO.Compression.FileSystem
             $zip = [IO.Compression.ZipFile]::OpenRead("$SourceFile")
         
-                $zip.Entries | where {$_.Name -like "$filename" } | foreach {
+                $zip.Entries | Where-Object {$_.Name -like "$filename" } | ForEach-Object {
         
                 [System.IO.Compression.ZipFileExtensions]::ExtractToFile($_, "$Directory\$folder\$filename", $true)
         
@@ -819,7 +803,7 @@ Connect-MgGraph -Scopes DeviceManagementApps.ReadWrite.All,Group.ReadWrite.All,G
         
         ####################################################
         
-        function Upload-Win32Lob(){
+        function Invoke-UploadWin32Lob(){
         
         <#
         .SYNOPSIS
@@ -827,10 +811,10 @@ Connect-MgGraph -Scopes DeviceManagementApps.ReadWrite.All,Group.ReadWrite.All,G
         .DESCRIPTION
         This function is used to upload a Win32 Application to the Intune Service
         .EXAMPLE
-        Upload-Win32Lob "C:\Packages\package.intunewin" -publisher "Microsoft" -description "Package"
+        Invoke-UploadWin32Lob "C:\Packages\package.intunewin" -publisher "Microsoft" -description "Package"
         This example uses all parameters required to add an intunewin File into the Intune Service
         .NOTES
-        NAME: Upload-Win32LOB
+        NAME: Invoke-UploadWin32Lob
         #>
         
         [cmdletbinding()]
@@ -979,14 +963,14 @@ Connect-MgGraph -Scopes DeviceManagementApps.ReadWrite.All,Group.ReadWrite.All,G
         
                 Write-Host
                 Write-Host "Creating application in Intune..." -ForegroundColor Yellow
-                $mobileApp = MakePostRequest "mobileApps" ($mobileAppBody | ConvertTo-Json);
+                $mobileApp = New-MgDeviceAppManagementMobileApp -BodyParameter ($mobileAppBody | ConvertTo-Json)
         
                 # Get the content version for the new app (this will always be 1 until the new app is committed).
                 Write-Host
                 Write-Host "Creating Content Version in the service for the application..." -ForegroundColor Yellow
                 $appId = $mobileApp.id;
                 $contentVersionUri = "mobileApps/$appId/$LOBType/contentVersions";
-                $contentVersion = MakePostRequest $contentVersionUri "{}";
+                $contentVersion = Invoke-MgGraphRequest -method POST -Uri $contentVersionUri -Body "{}";
         
                 # Encrypt file and Get File Information
                 Write-Host
@@ -1016,7 +1000,7 @@ Connect-MgGraph -Scopes DeviceManagementApps.ReadWrite.All,Group.ReadWrite.All,G
                 $contentVersionId = $contentVersion.id;
                 $fileBody = GetAppFileBody "$FileName" $Size $EncrySize $null;
                 $filesUri = "mobileApps/$appId/$LOBType/contentVersions/$contentVersionId/files";
-                $file = MakePostRequest $filesUri ($fileBody | ConvertTo-Json);
+                $file = Invoke-MgGraphRequest -Method POST -Uri $filesUri -Body ($fileBody | ConvertTo-Json)
             
                 # Wait for the service to process the new file request.
                 Write-Host
@@ -1040,7 +1024,7 @@ Connect-MgGraph -Scopes DeviceManagementApps.ReadWrite.All,Group.ReadWrite.All,G
                 Write-Host
                 Write-Host "Committing the file into Azure Storage..." -ForegroundColor Yellow
                 $commitFileUri = "mobileApps/$appId/$LOBType/contentVersions/$contentVersionId/files/$fileId/commit";
-                MakePostRequest $commitFileUri ($fileEncryptionInfo | ConvertTo-Json);
+                Invoke-MgGraphRequest -Uri $commitFileUri -Method POST -Body ($fileEncryptionInfo | ConvertTo-Json)
         
                 # Wait for the service to process the commit file request.
                 Write-Host
@@ -1052,7 +1036,7 @@ Connect-MgGraph -Scopes DeviceManagementApps.ReadWrite.All,Group.ReadWrite.All,G
                 Write-Host "Committing the file into Azure Storage..." -ForegroundColor Yellow
                 $commitAppUri = "mobileApps/$appId";
                 $commitAppBody = GetAppCommitBody $contentVersionId $LOBType;
-                MakePatchRequest $commitAppUri ($commitAppBody | ConvertTo-Json);
+                Invoke-MgGraphRequest -Method PATCH -Uri $commitAppUri -Body ($commitAppBody | ConvertTo-Json)
         
                 Write-Host "Sleeping for $sleep seconds to allow patch completion..." -f Magenta
                 Start-Sleep $sleep
@@ -1067,61 +1051,7 @@ Connect-MgGraph -Scopes DeviceManagementApps.ReadWrite.All,Group.ReadWrite.All,G
             
             }
         }
-        
-        ####################################################
-        $user = $cred.UserName
-        Function Test-AuthToken(){
-        
-            # Checking if authToken exists before running authentication
-            if($global:authToken){
-        
-                # Setting DateTime to Universal time to work in all timezones
-                $DateTime = (Get-Date).ToUniversalTime()
-        
-                # If the authToken exists checking when it expires
-                $TokenExpires = ($authToken.ExpiresOn.datetime - $DateTime).Minutes
-        
-                    if($TokenExpires -le 0){
-        
-                    write-host "Authentication Token expired" $TokenExpires "minutes ago" -ForegroundColor Yellow
-                    write-host
-        
-                        # Defining Azure AD tenant name, this is the name of your Azure Active Directory (do not use the verified domain name)
-        
-                        if($User -eq $null -or $User -eq ""){
-                            $Global:User = $cred.UserName
-                            #$Global:User = Read-Host -Prompt "Please specify your user principal name for Azure Authentication"
-                                Write-Host
-        
-                        }
-        
-                    $global:authToken = Get-AuthToken -User $User
-        
-                    }
-            }
-        
-            # Authentication doesn't exist, calling Get-AuthToken function
-        
-            else {
-        
-                if($User -eq $null -or $User -eq ""){
-                    $Global:User = $cred.UserName
-                    #$Global:User = Read-Host -Prompt "Please specify your user principal name for Azure Authentication"
-                    Write-Host
-        
-                }
-        
-            # Getting the authorization token
-            $global:authToken = Get-AuthToken -User $User
-        
-            }
-        }
-        
-        ####################################################
-        
-        Test-AuthToken
-        
-        ####################################################
+    
         
         $baseUrl = "https://graph.microsoft.com/beta/deviceAppManagement/"
         
@@ -1145,10 +1075,7 @@ Connect-MgGraph -Scopes DeviceManagementApps.ReadWrite.All,Group.ReadWrite.All,G
         Returns any applications configured in Intune
         .NOTES
         NAME: Get-IntuneApplication
-        #>
-        
-        [cmdletbinding()]
-            
+        #>            
             try {
 
             Get-MgDeviceAppManagementMobileApp -All | Where-Object { (!($_.AdditionalProperties['@odata.type']).Contains("managed")) }
@@ -1897,7 +1824,7 @@ Function Uninstall-WinGetPackage{
 }
 
 
-Function Upgrade-WinGetPackage
+Function Update-WinGetPackage
 {
     <#
         .SYNOPSIS
@@ -1976,17 +1903,17 @@ Function Upgrade-WinGetPackage
         .PARAMETER AcceptSourceAgreement
 
         .EXAMPLE
-        Upgrade-WinGetPackage -id "Publisher.Package"
+        Update-WinGetPackage -id "Publisher.Package"
 
         This example expects only a single package containing "Publisher.Package" as a valid identifier.
 
         .EXAMPLE
-        Upgrade-WinGetPackage -id "Publisher.Package" -source "Private"
+        Update-WinGetPackage -id "Publisher.Package" -source "Private"
 
         This example expects the source named "Private" contains a package with "Publisher.Package" as a valid identifier.
 
         .EXAMPLE
-        Upgrade-WinGetPackage -Name "Package"
+        Update-WinGetPackage -Name "Package"
 
         This example expects the source named "Private" contains a package with "Package" as a valid name.
     #>
@@ -2235,7 +2162,7 @@ function new-aadgroups  {
         }
     }
 
-    $grp = New-AzureADMSGroup -DisplayName $groupname -Description $groupdescription -MailEnabled $False -MailNickName $nickname -SecurityEnabled $True
+    $grp = New-MgGroup -DisplayName $groupname -Description $groupdescription -MailEnabled:$False -MailNickName $nickname -SecurityEnabled:$True
 
     return $grp.id
 
@@ -2335,8 +2262,6 @@ function new-proac {
         $Resource = "deviceManagement/deviceHealthScripts"
         $uri = "https://graph.microsoft.com/$graphApiVersion/$Resource"
 
-        New-MgDevice
-
         $proactive = Invoke-MgGraphRequest -Uri $uri -Method POST -Body $paramsjson -ContentType "application/json"
 
 
@@ -2377,7 +2302,7 @@ function new-intunewinfile {
         $apppath,
         $setupfilename
     )
-    Start-Process $intuneapputiloutput -ArgumentList "-c $apppath -s $setupfilename -o $apppath <-q>" 
+    . $intuneapputiloutput -c "$apppath" -s "$setupfilename" -o "$apppath" -q
 
 }
 
@@ -2452,7 +2377,6 @@ function assign-win32app  {
     $Application = Get-IntuneApplication | where-object { $_.displayName -eq "$appname" }
 
     #Install
-    $graphApiVersion = "Beta"
     $ApplicationId = $Application.id
     $TargetGroupId1 = $installgroup
     $InstallIntent1 = "required"
@@ -2462,7 +2386,6 @@ function assign-win32app  {
     $ApplicationId = $Application.id
     $TargetGroupId = $uninstallgroup
     $InstallIntent = "uninstall"
-    $Resource = "deviceAppManagement/mobileApps/$ApplicationId/assign"
     $JSON = @"
     
     {
@@ -2513,7 +2436,7 @@ $DetectionRule = @($PSRule)
 $ReturnCodes = Get-DefaultReturnCodes
 
 # Win32 Application Upload
-$appupload = Upload-Win32Lob -SourceFile "$appfile" -DisplayName "$appname" -publisher "Winget" `
+$appupload = Invoke-UploadWin32Lob -SourceFile "$appfile" -DisplayName "$appname" -publisher "Winget" `
 -description "$appname Winget Package" -detectionRules $DetectionRule -returnCodes $ReturnCodes `
 -installCmdLine "$installcmd" `
 -uninstallCmdLine "$uninstallcmd"
@@ -2526,68 +2449,7 @@ return $appupload
 ######                          END FUNCTIONS SECTION                                               ########
 ############################################################################################################
 
-###############################################################################################################
-######                                          Connect                                                  ######
-###############################################################################################################
-
-
-##Get Credentials
-
-Connect-AzureAD -Credential $cred
-$user = $cred.UserName
-#Authenticate for MS Graph
-#region Authentication
-
-write-host
-
-# Checking if authToken exists before running authentication
-if($global:authToken){
-
-    # Setting DateTime to Universal time to work in all timezones
-    $DateTime = (Get-Date).ToUniversalTime()
-
-    # If the authToken exists checking when it expires
-    $TokenExpires = ($authToken.ExpiresOn.datetime - $DateTime).Minutes
-
-        if($TokenExpires -le 0){
-
-        write-host "Authentication Token expired" $TokenExpires "minutes ago" -ForegroundColor Yellow
-        write-host
-
-            # Defining User Principal Name if not present
-
-            if($User -eq $null -or $User -eq ""){
-                #$user = $cred.UserName
-            $User = Read-Host -Prompt "Please specify your user principal name for Azure Authentication"
-            Write-Host
-
-            }
-
-        $global:authToken = Get-AuthToken -User $User
-
-        }
-}
-
-# Authentication doesn't exist, calling Get-AuthToken function
-
-else {
-
-    if($User -eq $null -or $User -eq ""){
-        #$user = $cred.UserName
-    $User = Read-Host -Prompt "Please specify your user principal name for Azure Authentication"
-    Write-Host
-
-    }
-
-# Getting the authorization token
-$global:authToken = Get-AuthToken -User $User
-
-}
-
-#endregion
-
-###############################################################################################################
-
+Write-Host "Loading Winget Packages"
 
 find-wingetpackage '""' | out-gridview -PassThru -Title "Available Applications" | ForEach-Object {
     $appid = $_.Id.Trim()
@@ -2598,7 +2460,7 @@ find-wingetpackage '""' | out-gridview -PassThru -Title "Available Applications"
 
 ##Create Directory
 write-host "Creating Directory for $appname"
-$apppath = $path + $appname
+$apppath = "$path\$appname"
 new-item -Path $apppath -ItemType Directory -Force
 write-host "Directory $apppath Created"
 
@@ -2661,3 +2523,5 @@ write-host "Assigned $uninstallgroup as Required Uninstall to $appname"
 write-host "$appname packaged and deployed"
 
 }
+
+Stop-Transcript
