@@ -44,7 +44,7 @@ Start-Transcript -Path "$path\intune-$date.log"
 $intuneapputiloutput = "$path\IntuneWinAppUtil.exe"
 
 if (!(Test-Path $intuneapputiloutput)) {
-    Write-Information "Downloading IntuneWinAppUtil.exe"
+    Write-Host "Downloading IntuneWinAppUtil.exe"
     ##IntuneWinAppUtil
     $intuneapputilurl = "https://github.com/microsoft/Microsoft-Win32-Content-Prep-Tool/raw/master/IntuneWinAppUtil.exe"
     Invoke-WebRequest -Uri $intuneapputilurl -OutFile $intuneapputiloutput | Out-Null
@@ -2071,18 +2071,19 @@ function new-aadgroups {
         
     param
     (
+        $appid,
         $appname,
         $grouptype
     )
     switch ($grouptype) {
         "install" {
             $groupname = $appname + " Install Group"
-            $nickname = $appname + "install"
+            $nickname = $appid + "install"
             $groupdescription = "Group for installation and updating of $appname application"
         }
         "uninstall" {
             $groupname = $appname + " Uninstall Group"
-            $nickname = $appname + "uninstall"
+            $nickname = $appid + "uninstall"
             $groupdescription = "Group for uninstallation of $appname application"
         }
     }
@@ -2373,10 +2374,16 @@ function new-win32app {
 ######                          END FUNCTIONS SECTION                                               ########
 ############################################################################################################
 
+$question = $host.UI.PromptForChoice("Verbose output?", "Do you want verbose output?", ([System.Management.Automation.Host.ChoiceDescription]"&Yes",[System.Management.Automation.Host.ChoiceDescription]"&No"), 1)
+
 Write-Verbose "Connecting to Microsoft Graph"
 Select-MgProfile -Name Beta
 Connect-MgGraph -Scopes DeviceManagementApps.ReadWrite.All, DeviceManagementConfiguration.ReadWrite.All, Group.ReadWrite.All, GroupMember.ReadWrite.All, openid, profile, email, offline_access
 Write-Verbose "Graph connection established"
+
+if ($question -eq 0) {
+    $VerbosePreference="Continue"
+}
 
 Write-Progress "Loading Winget Packages" -PercentComplete 1
 
@@ -2393,51 +2400,51 @@ $packs | out-gridview -PassThru -Title "Available Applications" | ForEach-Object
 
     ##Create Directory
     Write-Verbose "Creating Directory for $appname"
-    $apppath = "$path\$appname"
+    $apppath = "$path\$appid"
     new-item -Path $apppath -ItemType Directory -Force
-    Write-Infomation "Directory $apppath Created"
+    Write-Host "Directory $apppath Created"
 
     ##Create Groups
     Write-Verbose "Creating AAD Groups for $appname"
-    $installgroup = new-aadgroups -appname $appname -grouptype "Install"
-    $uninstallgroup = new-aadgroups -appname $appname -grouptype "Uninstall"
-    Write-Information "Created $installgroup for installing $appname"
-    Write-Information "Created $uninstallgroup for uninstalling $appname"
+    $installgroup = new-aadgroups -appid $appid -appname $appname -grouptype "Install"
+    $uninstallgroup = new-aadgroups -appid $appid -appname $appname -grouptype "Uninstall"
+    Write-Host "Created $installgroup for installing $appname"
+    Write-Host "Created $uninstallgroup for uninstalling $appname"
 
     ##Create Install Script
     Write-Verbose "Creating Install Script for $appname"
     $installscript = new-installscript -appid $appid -appname $appname
-    $installfilename = "install$appname.ps1"
+    $installfilename = "install$appid.ps1"
     $installscriptfile = $apppath + "\" + $installfilename
     $installscript | Out-File $installscriptfile
-    Write-Information "Script created at $installscriptfile"
+    Write-Host "Script created at $installscriptfile"
 
     ##Create Uninstall Script
     Write-Verbose "Creating Uninstall Script for $appname"
     $uninstallscript = new-uninstallscript -appid $appid -appname $appname
-    $uninstallfilename = "uninstall$appname.ps1"
+    $uninstallfilename = "uninstall$appid.ps1"
     $uninstallscriptfile = $apppath + "\" + $uninstallfilename
     $uninstallscript | Out-File $uninstallscriptfile
-    Write-Information "Script created at $uninstallscriptfile"
+    Write-Host "Script created at $uninstallscriptfile"
 
     ##Create Detection Script
     Write-Verbose "Creating Detection Script for $appname"
     $detectionscript = new-detectionscript -appid $appid -appname $appname
-    $detectionscriptfile = $apppath + "\detection$appname.ps1"
+    $detectionscriptfile = $apppath + "\detection$appid.ps1"
     $detectionscript | Out-File $detectionscriptfile
-    Write-Information "Script created at $detectionscriptfile"
+    Write-Host "Script created at $detectionscriptfile"
 
 
     ##Create Proac
     Write-Verbose "Creation Proactive Remediation for $appname"
     new-proac -appid $appid -appname $appname -groupid $installgroup
-    Write-Information "Proactive Remediation Created and Assigned for $appname"
+    Write-Host "Proactive Remediation Created and Assigned for $appname"
 
     ##Create IntuneWin
     Write-Verbose "Creating Intunewin File for $appname"
-    $intunewinpath = $apppath + "\install$appname.intunewin"
+    $intunewinpath = $apppath + "\install$appid.intunewin"
     new-intunewinfile -appid $appid -appname $appname -apppath $apppath -setupfilename $installscriptfile
-    Write-Information "Intunewin $intunewinpath Created"
+    Write-Host "Intunewin $intunewinpath Created"
     $sleep = 10
     foreach ($i in 0..$sleep) {
         Write-Progress -Activity "Sleeping for $($sleep-$i) seconds" -PercentComplete ($i / $sleep * 100) -SecondsRemaining ($sleep - $i)
@@ -2448,17 +2455,21 @@ $packs | out-gridview -PassThru -Title "Available Applications" | ForEach-Object
     $installcmd = "powershell.exe -ExecutionPolicy Bypass -File $installfilename"
     $uninstallcmd = "powershell.exe -ExecutionPolicy Bypass -File $uninstallfilename"
     new-win32app -appid $appid -appname $appname -appfile $intunewinpath -installcmd $installcmd -uninstallcmd $uninstallcmd -detectionfile $detectionscriptfile
-    Write-Information "$appname Created and uploaded"
+    Write-Host "$appname Created and uploaded"
 
     ##Assign Win32
     Write-Verbose "Assigning Groups"
     grant-win32app -appname $appname -installgroup $installgroup -uninstallgroup $uninstallgroup
-    Write-Information "Assigned $installgroup as Required Install to $appname"
-    Write-Information "Assigned $uninstallgroup as Required Uninstall to $appname"
+    Write-Host "Assigned $installgroup as Required Install to $appname"
+    Write-Host "Assigned $uninstallgroup as Required Uninstall to $appname"
 
     ##Done
-    Write-Information "$appname packaged and deployed"
+    Write-Host "$appname packaged and deployed"
 
 }
-Disconnect-MgGraph | Out-Null
+Disconnect-MgGraph
+if ($question -eq 0) {
+    $VerbosePreference="SilentlyContinue"
+}
+
 Stop-Transcript
