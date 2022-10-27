@@ -43,7 +43,7 @@ Start-Transcript -Path "$path\intune-$date.log"
 
 $intuneapputiloutput = "$path\IntuneWinAppUtil.exe"
 
-if (!Test-Path $intuneapputiloutput) {
+if (!(Test-Path $intuneapputiloutput)) {
     Write-Information "Downloading IntuneWinAppUtil.exe"
     ##IntuneWinAppUtil
     $intuneapputilurl = "https://github.com/microsoft/Microsoft-Win32-Content-Prep-Tool/raw/master/IntuneWinAppUtil.exe"
