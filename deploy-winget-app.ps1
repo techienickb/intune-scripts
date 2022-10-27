@@ -935,28 +935,21 @@ function Invoke-UploadWin32Lob() {
         }
         
         else {
-        
-            Write-Host
             Write-Warning "Intunewin file requires ReturnCodes to be specified"
             Write-Warning "If you want to use the default ReturnCode run 'Get-DefaultReturnCodes'"
-            Write-Host
             break
-        
         }
         
-        Write-Host
         Write-Host "Creating application in Intune..." -ForegroundColor Yellow
         $mobileApp = New-MgDeviceAppManagementMobileApp -BodyParameter ($mobileAppBody | ConvertTo-Json)
         
         # Get the content version for the new app (this will always be 1 until the new app is committed).
-        Write-Host
         Write-Host "Creating Content Version in the service for the application..." -ForegroundColor Yellow
         $appId = $mobileApp.id;
         $contentVersionUri = "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/$appId/$LOBType/contentVersions";
         $contentVersion = Invoke-MgGraphRequest -method POST -Uri $contentVersionUri -Body "{}"
         
         # Encrypt file and Get File Information
-        Write-Host
         Write-Host "Getting Encryption Information for '$SourceFile'..." -ForegroundColor Yellow
         
         $encryptionInfo = @{};
@@ -978,7 +971,6 @@ function Invoke-UploadWin32Lob() {
         $EncrySize = (Get-Item "$IntuneWinFile").Length
         
         # Create a new file for the app.
-        Write-Host
         Write-Host "Creating a new file entry in Azure for the upload..." -ForegroundColor Yellow
         $contentVersionId = $contentVersion.id;
         $fileBody = GetAppFileBody "$FileName" $Size $EncrySize $null;
@@ -986,7 +978,6 @@ function Invoke-UploadWin32Lob() {
         $file = Invoke-MgGraphRequest -Method POST -Uri $filesUri -Body ($fileBody | ConvertTo-Json)
             
         # Wait for the service to process the new file request.
-        Write-Host
         Write-Host "Waiting for the file entry URI to be created..." -ForegroundColor Yellow
         $fileId = $file.id;
         $fileUri = "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/$appId/$LOBType/contentVersions/$contentVersionId/files/$fileId";
