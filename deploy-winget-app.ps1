@@ -47,9 +47,6 @@ $intuneapputilurl = "https://github.com/microsoft/Microsoft-Win32-Content-Prep-T
 $intuneapputiloutput = "$path\IntuneWinAppUtil.exe"
 Invoke-WebRequest -Uri $intuneapputilurl -OutFile $intuneapputiloutput | Out-Null
 
-Select-MgProfile -Name Beta
-Connect-MgGraph -Scopes DeviceManagementApps.ReadWrite.All, DeviceManagementConfiguration.ReadWrite.All, Group.ReadWrite.All, GroupMember.ReadWrite.All, openid, profile, email, offline_access
-
 ###############################################################################################################
 ######                                          Add Functions                                            ######
 ###############################################################################################################
@@ -2353,7 +2350,7 @@ function grant-win32app {
     }
     
 "@
-    Invoke-MgGraphRequest -Uri "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/$ApplicationId/assign" -Method POST -Body $JSON -Debug
+    Invoke-MgGraphRequest -Uri "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/$ApplicationId/assign" -Method POST -Body $JSON
     
 }
 
@@ -2391,6 +2388,11 @@ function new-win32app {
 ############################################################################################################
 ######                          END FUNCTIONS SECTION                                               ########
 ############################################################################################################
+
+Write-Host "Connecting to Microsoft Graph"
+Select-MgProfile -Name Beta
+Connect-MgGraph -Scopes DeviceManagementApps.ReadWrite.All, DeviceManagementConfiguration.ReadWrite.All, Group.ReadWrite.All, GroupMember.ReadWrite.All, openid, profile, email, offline_access
+Write-Host "Graph connection established" -ForegroundColor DarkGreen
 
 Write-Host "Loading Winget Packages"
 
