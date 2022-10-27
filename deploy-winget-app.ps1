@@ -45,10 +45,10 @@ Write-Host "Downloading IntuneWinAppUtil.exe"
 ##IntuneWinAppUtil
 $intuneapputilurl = "https://github.com/microsoft/Microsoft-Win32-Content-Prep-Tool/raw/master/IntuneWinAppUtil.exe"
 $intuneapputiloutput = "$path\IntuneWinAppUtil.exe"
-Invoke-WebRequest -Uri $intuneapputilurl -OutFile $intuneapputiloutput
+Invoke-WebRequest -Uri $intuneapputilurl -OutFile $intuneapputiloutput | Out-Null
 
 Select-MgProfile -Name Beta
-Connect-MgGraph -Scopes DeviceManagementApps.ReadWrite.All,DeviceManagementConfiguration.ReadWrite.All,Group.ReadWrite.All,GroupMember.ReadWrite.All
+Connect-MgGraph -Scopes DeviceManagementApps.ReadWrite.All,DeviceManagementConfiguration.ReadWrite.All,Group.ReadWrite.All,GroupMember.ReadWrite.All,openid,profile,email,offline_access
 
 ###############################################################################################################
 ######                                          Add Functions                                            ######
@@ -969,8 +969,8 @@ Connect-MgGraph -Scopes DeviceManagementApps.ReadWrite.All,DeviceManagementConfi
                 Write-Host
                 Write-Host "Creating Content Version in the service for the application..." -ForegroundColor Yellow
                 $appId = $mobileApp.id;
-                $contentVersionUri = "mobileApps/$appId/$LOBType/contentVersions";
-                $contentVersion = Invoke-MgGraphRequest -method POST -Uri $contentVersionUri -Body "{}";
+                $contentVersionUri = "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/$appId/$LOBType/contentVersions";
+                $contentVersion = Invoke-MgGraphRequest -method POST -Uri $contentVersionUri -Body "{}"
         
                 # Encrypt file and Get File Information
                 Write-Host
@@ -999,14 +999,14 @@ Connect-MgGraph -Scopes DeviceManagementApps.ReadWrite.All,DeviceManagementConfi
                 Write-Host "Creating a new file entry in Azure for the upload..." -ForegroundColor Yellow
                 $contentVersionId = $contentVersion.id;
                 $fileBody = GetAppFileBody "$FileName" $Size $EncrySize $null;
-                $filesUri = "mobileApps/$appId/$LOBType/contentVersions/$contentVersionId/files";
+                $filesUri = "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/$appId/$LOBType/contentVersions/$contentVersionId/files";
                 $file = Invoke-MgGraphRequest -Method POST -Uri $filesUri -Body ($fileBody | ConvertTo-Json)
             
                 # Wait for the service to process the new file request.
                 Write-Host
                 Write-Host "Waiting for the file entry URI to be created..." -ForegroundColor Yellow
                 $fileId = $file.id;
-                $fileUri = "mobileApps/$appId/$LOBType/contentVersions/$contentVersionId/files/$fileId";
+                $fileUri = "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/$appId/$LOBType/contentVersions/$contentVersionId/files/$fileId";
                 $file = WaitForFileProcessing $fileUri "AzureStorageUriRequest";
         
                 # Upload the content to Azure Storage.
@@ -1023,7 +1023,7 @@ Connect-MgGraph -Scopes DeviceManagementApps.ReadWrite.All,DeviceManagementConfi
                 # Commit the file.
                 Write-Host
                 Write-Host "Committing the file into Azure Storage..." -ForegroundColor Yellow
-                $commitFileUri = "mobileApps/$appId/$LOBType/contentVersions/$contentVersionId/files/$fileId/commit";
+                $commitFileUri = "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/$appId/$LOBType/contentVersions/$contentVersionId/files/$fileId/commit";
                 Invoke-MgGraphRequest -Uri $commitFileUri -Method POST -Body ($fileEncryptionInfo | ConvertTo-Json)
         
                 # Wait for the service to process the commit file request.
@@ -1034,7 +1034,7 @@ Connect-MgGraph -Scopes DeviceManagementApps.ReadWrite.All,DeviceManagementConfi
                 # Commit the app.
                 Write-Host
                 Write-Host "Committing the file into Azure Storage..." -ForegroundColor Yellow
-                $commitAppUri = "mobileApps/$appId";
+                $commitAppUri = "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/$appId";
                 $commitAppBody = GetAppCommitBody $contentVersionId $LOBType;
                 Invoke-MgGraphRequest -Method PATCH -Uri $commitAppUri -Body ($commitAppBody | ConvertTo-Json)
         
@@ -2374,8 +2374,7 @@ function assign-win32app  {
         $installgroup,
         $uninstallgroup
     )
-    $Application = Get-IntuneApplication | where-object { $_.displayName -eq "$appname" }
-
+    $Application = Get-IntuneApplication | where-object { $_.displayName -eq "$appname" -and $_.description -like "*Winget*" }
     #Install
     $ApplicationId = $Application.id
     $TargetGroupId1 = $installgroup
@@ -2410,7 +2409,7 @@ function assign-win32app  {
     }
     
 "@
-    New-MgDeviceAppManagementMobileAppAssignment -MobileAppId $ApplicationId -BodyParameter $JSON
+    Invoke-MgGraphRequest -Uri "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/$ApplicationId/assign" -Method POST -Body $JSON -Debug
     
 }
 
@@ -2523,5 +2522,5 @@ write-host "Assigned $uninstallgroup as Required Uninstall to $appname"
 write-host "$appname packaged and deployed"
 
 }
-
+Disconnect-MgGraph | Out-Null
 Stop-Transcript
