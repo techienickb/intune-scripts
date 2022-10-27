@@ -2471,5 +2471,5 @@ Disconnect-MgGraph
 if ($question -eq 0) {
     $VerbosePreference="SilentlyContinue"
 }
-
+Write-Host "👍 Selected apps have been deployed to Intune" -ForegroundColor Green
 Stop-Transcript
