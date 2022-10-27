@@ -41,12 +41,14 @@ $date = get-date -format ddMMyyyy
 $path = "$($env:TEMP)\intune"
 Start-Transcript -Path "$path\intune-$date.log"
 
-Write-Host "Downloading IntuneWinAppUtil.exe"
-##IntuneWinAppUtil
-$intuneapputilurl = "https://github.com/microsoft/Microsoft-Win32-Content-Prep-Tool/raw/master/IntuneWinAppUtil.exe"
 $intuneapputiloutput = "$path\IntuneWinAppUtil.exe"
-Invoke-WebRequest -Uri $intuneapputilurl -OutFile $intuneapputiloutput | Out-Null
 
+if (!Test-Path $intuneapputiloutput) {
+    Write-Information "Downloading IntuneWinAppUtil.exe"
+    ##IntuneWinAppUtil
+    $intuneapputilurl = "https://github.com/microsoft/Microsoft-Win32-Content-Prep-Tool/raw/master/IntuneWinAppUtil.exe"
+    Invoke-WebRequest -Uri $intuneapputilurl -OutFile $intuneapputiloutput | Out-Null
+}
 ###############################################################################################################
 ######                                          Add Functions                                            ######
 ###############################################################################################################
@@ -75,7 +77,7 @@ function Add-MDMApplication() {
         
         if (!$JSON) {
         
-            write-host "No JSON was passed to the function, provide a JSON variable" -f Red
+            Write-Error "No JSON was passed to the function, provide a JSON variable"
             break
         
         }
@@ -92,10 +94,10 @@ function Add-MDMApplication() {
         $reader = New-Object System.IO.StreamReader($errorResponse)
         $reader.BaseStream.Position = 0
         $reader.DiscardBufferedData()
-        $responseBody = $reader.ReadToEnd();
-        Write-Host "Response content:`n$responseBody" -f Red
+        $responseBody = $reader.ReadToEnd()
+        Write-Debug "Response content:`n$responseBody"
         Write-Error "Request to $Uri failed with HTTP Status $($ex.Response.StatusCode) $($ex.Response.StatusDescription)"
-        write-host
+
         break
         
     }
@@ -131,14 +133,14 @@ Function Add-ApplicationAssignment() {
         
         if (!$ApplicationId) {
         
-            write-host "No Application Id specified, specify a valid Application Id" -f Red
+            Write-Error "No Application Id specified, specify a valid Application Id"
             break
         
         }
         
         if (!$TargetGroupId) {
         
-            write-host "No Target Group Id specified, specify a valid Target Group Id" -f Red
+            Write-Error "No Target Group Id specified, specify a valid Target Group Id"
             break
         
         }
@@ -146,7 +148,7 @@ Function Add-ApplicationAssignment() {
                 
         if (!$InstallIntent) {
         
-            write-host "No Install Intent specified, specify a valid Install Intent - available, notApplicable, required, uninstall, availableWithoutEnrollment" -f Red
+            Write-Error "No Install Intent specified, specify a valid Install Intent - available, notApplicable, required, uninstall, availableWithoutEnrollment"
             break
         
         }
@@ -176,10 +178,9 @@ Function Add-ApplicationAssignment() {
         $reader = New-Object System.IO.StreamReader($errorResponse)
         $reader.BaseStream.Position = 0
         $reader.DiscardBufferedData()
-        $responseBody = $reader.ReadToEnd();
-        Write-Host "Response content:`n$responseBody" -f Red
+        $responseBody = $reader.ReadToEnd()
+        Write-Debug "Response content:`n$responseBody"
         Write-Error "Request to $Uri failed with HTTP Status $($ex.Response.StatusCode) $($ex.Response.StatusDescription)"
-        write-host
         break
         
     }
@@ -189,36 +190,36 @@ Function Add-ApplicationAssignment() {
         
 function CloneObject($object) {
         
-    $stream = New-Object IO.MemoryStream;
-    $formatter = New-Object Runtime.Serialization.Formatters.Binary.BinaryFormatter;
-    $formatter.Serialize($stream, $object);
-    $stream.Position = 0;
-    $formatter.Deserialize($stream);
+    $stream = New-Object IO.MemoryStream
+    $formatter = New-Object Runtime.Serialization.Formatters.Binary.BinaryFormatter
+    $formatter.Serialize($stream, $object)
+    $stream.Position = 0
+    $formatter.Deserialize($stream)
 }
         
 ####################################################
         
 function UploadAzureStorageChunk($sasUri, $id, $body) {
         
-    $uri = "$sasUri&comp=block&blockid=$id";
-    $request = "PUT $uri";
+    $uri = "$sasUri&comp=block&blockid=$id"
+    $request = "PUT $uri"
         
-    $iso = [System.Text.Encoding]::GetEncoding("iso-8859-1");
-    $encodedBody = $iso.GetString($body);
+    $iso = [System.Text.Encoding]::GetEncoding("iso-8859-1")
+    $encodedBody = $iso.GetString($body)
     $headers = @{
         "x-ms-blob-type" = "BlockBlob"
-    };
+    }
         
-    if ($logRequestUris) { Write-Host $request; }
-    if ($logHeaders) { WriteHeaders $headers; }
+    if ($logRequestUris) { Write-Verbose $request }
+    if ($logHeaders) { WriteHeaders $headers }
         
     try {
-        Invoke-WebRequest $uri -Method Put -Headers $headers -Body $encodedBody;
+        Invoke-WebRequest $uri -Method Put -Headers $headers -Body $encodedBody
     }
     catch {
-        Write-Host -ForegroundColor Red $request;
-        Write-Host -ForegroundColor Red $_.Exception.Message;
-        throw;
+        Write-Error $request
+        Write-Error $_.Exception.Message
+        throw
     }
         
 }
@@ -227,25 +228,25 @@ function UploadAzureStorageChunk($sasUri, $id, $body) {
         
 function FinalizeAzureStorageUpload($sasUri, $ids) {
         
-    $uri = "$sasUri&comp=blocklist";
-    $request = "PUT $uri";
+    $uri = "$sasUri&comp=blocklist"
+    $request = "PUT $uri"
         
-    $xml = '<?xml version="1.0" encoding="utf-8"?><BlockList>';
+    $xml = '<?xml version="1.0" encoding="utf-8"?><BlockList>'
     foreach ($id in $ids) {
-        $xml += "<Latest>$id</Latest>";
+        $xml += "<Latest>$id</Latest>"
     }
-    $xml += '</BlockList>';
+    $xml += '</BlockList>'
         
-    if ($logRequestUris) { Write-Host $request; }
-    if ($logContent) { Write-Host -ForegroundColor Gray $xml; }
+    if ($logRequestUris) { Write-Verbose $request }
+    if ($logContent) { Write-Verbose $xml }
         
     try {
-        Invoke-RestMethod $uri -Method Put -Body $xml;
+        Invoke-RestMethod $uri -Method Put -Body $xml
     }
     catch {
-        Write-Host -ForegroundColor Red $request;
-        Write-Host -ForegroundColor Red $_.Exception.Message;
-        throw;
+        Write-Error $request
+        Write-Error $_.Exception.Message
+        throw
     }
 }
         
@@ -255,41 +256,41 @@ function UploadFileToAzureStorage($sasUri, $filepath, $fileUri) {
         
     try {
         
-        $chunkSizeInBytes = 1024l * 1024l * $azureStorageUploadChunkSizeInMb;
+        $chunkSizeInBytes = 1024l * 1024l * $azureStorageUploadChunkSizeInMb
                 
         # Start the timer for SAS URI renewal.
         $sasRenewalTimer = [System.Diagnostics.Stopwatch]::StartNew()
                 
         # Find the file size and open the file.
-        $fileSize = (Get-Item $filepath).length;
-        $chunks = [Math]::Ceiling($fileSize / $chunkSizeInBytes);
-        $reader = New-Object System.IO.BinaryReader([System.IO.File]::Open($filepath, [System.IO.FileMode]::Open));
-        $reader.BaseStream.Seek(0, [System.IO.SeekOrigin]::Begin);
+        $fileSize = (Get-Item $filepath).length
+        $chunks = [Math]::Ceiling($fileSize / $chunkSizeInBytes)
+        $reader = New-Object System.IO.BinaryReader([System.IO.File]::Open($filepath, [System.IO.FileMode]::Open))
+        $reader.BaseStream.Seek(0, [System.IO.SeekOrigin]::Begin)
                 
         # Upload each chunk. Check whether a SAS URI renewal is required after each chunk is uploaded and renew if needed.
-        $ids = @();
+        $ids = @()
         
         for ($chunk = 0; $chunk -lt $chunks; $chunk++) {
         
-            $id = [System.Convert]::ToBase64String([System.Text.Encoding]::ASCII.GetBytes($chunk.ToString("0000")));
-            $ids += $id;
+            $id = [System.Convert]::ToBase64String([System.Text.Encoding]::ASCII.GetBytes($chunk.ToString("0000")))
+            $ids += $id
         
-            $start = $chunk * $chunkSizeInBytes;
-            $length = [Math]::Min($chunkSizeInBytes, $fileSize - $start);
-            $bytes = $reader.ReadBytes($length);
+            $start = $chunk * $chunkSizeInBytes
+            $length = [Math]::Min($chunkSizeInBytes, $fileSize - $start)
+            $bytes = $reader.ReadBytes($length)
                     
-            $currentChunk = $chunk + 1;			
+            $currentChunk = $chunk + 1			
         
             Write-Progress -Activity "Uploading File to Azure Storage" -status "Uploading chunk $currentChunk of $chunks" `
                 -percentComplete ($currentChunk / $chunks * 100)
         
-            UploadAzureStorageChunk $sasUri $id $bytes;
+            UploadAzureStorageChunk $sasUri $id $bytes
                     
             # Renew the SAS URI if 7 minutes have elapsed since the upload started or was renewed last.
             if ($currentChunk -lt $chunks -and $sasRenewalTimer.ElapsedMilliseconds -ge 450000) {
         
-                RenewAzureStorageUpload $fileUri;
-                $sasRenewalTimer.Restart();
+                RenewAzureStorageUpload $fileUri
+                $sasRenewalTimer.Restart()
                     
             }
         
@@ -297,18 +298,18 @@ function UploadFileToAzureStorage($sasUri, $filepath, $fileUri) {
         
         Write-Progress -Completed -Activity "Uploading File to Azure Storage"
         
-        $reader.Close();
+        $reader.Close()
         
     }
         
     finally {
         
-        if ($null -ne $reader) { $reader.Dispose(); }
+        if ($null -ne $reader) { $reader.Dispose() }
             
     }
             
     # Finalize the upload.
-    FinalizeAzureStorageUpload $sasUri $ids;
+    FinalizeAzureStorageUpload $sasUri $ids
         
 }
         
@@ -316,45 +317,45 @@ function UploadFileToAzureStorage($sasUri, $filepath, $fileUri) {
         
 function RenewAzureStorageUpload($fileUri) {
         
-    $renewalUri = "$fileUri/renewUpload";
-    $actionBody = "";
-    Invoke-MgGraphRequest -method POST -Uri $renewalUri -Body $actionBody;
+    $renewalUri = "$fileUri/renewUpload"
+    $actionBody = ""
+    Invoke-MgGraphRequest -method POST -Uri $renewalUri -Body $actionBody
             
-    Start-WaitForFileProcessing $fileUri "AzureStorageUriRenewal" $azureStorageRenewSasUriBackOffTimeInSeconds;
+    Start-WaitForFileProcessing $fileUri "AzureStorageUriRenewal" $azureStorageRenewSasUriBackOffTimeInSeconds
         
 }
         
 ####################################################
         
 function Start-WaitForFileProcessing($fileUri, $stage) {
+    
+    $attempts = 600
+    $waitTimeInSeconds = 10
         
-    $attempts = 600;
-    $waitTimeInSeconds = 10;
+    $successState = "$($stage)Success"
+    $pendingState = "$($stage)Pending"
         
-    $successState = "$($stage)Success";
-    $pendingState = "$($stage)Pending";
-        
-    $file = $null;
+    $file = $null
     while ($attempts -gt 0) {
-        $file = Invoke-MgGraphRequest -Method GET -Uri $fileUri;
+        $file = Invoke-MgGraphRequest -Method GET -Uri $fileUri
         
         if ($file.uploadState -eq $successState) {
-            break;
+            break
         }
         elseif ($file.uploadState -ne $pendingState) {
-            Write-Host -ForegroundColor Red $_.Exception.Message;
-            throw "File upload state is not success: $($file.uploadState)";
+            Write-Error $_.Exception.Message
+            throw "File upload state is not success: $($file.uploadState)"
         }
         
-        Start-Sleep $waitTimeInSeconds;
-        $attempts--;
+        Start-Sleep $waitTimeInSeconds
+        $attempts--
     }
         
     if ($null -eq $file -or $file.uploadState -ne $successState) {
-        throw "File request did not complete in the allotted time.";
+        throw "File request did not complete in the allotted time."
     }
         
-    $file;
+    $file
 }
         
 ####################################################
@@ -432,84 +433,84 @@ function Get-Win32AppBody() {
         
     if ($MSI) {
         
-        $body = @{ "@odata.type" = "#microsoft.graph.win32LobApp" };
-        $body.applicableArchitectures = "x64,x86";
-        $body.description = $description;
-        $body.developer = "";
-        $body.displayName = $displayName;
-        $body.fileName = $filename;
+        $body = @{ "@odata.type" = "#microsoft.graph.win32LobApp" }
+        $body.applicableArchitectures = "x64,x86"
+        $body.description = $description
+        $body.developer = ""
+        $body.displayName = $displayName
+        $body.fileName = $filename
         $body.installCommandLine = "msiexec /i `"$SetupFileName`""
-        $body.installExperience = @{"runAsAccount" = "$installExperience" };
-        $body.informationUrl = $null;
-        $body.isFeatured = $false;
-        $body.minimumSupportedOperatingSystem = @{"v10_1607" = $true };
+        $body.installExperience = @{"runAsAccount" = "$installExperience" }
+        $body.informationUrl = $null
+        $body.isFeatured = $false
+        $body.minimumSupportedOperatingSystem = @{"v10_1607" = $true }
         $body.msiInformation = @{
-            "packageType"    = "$MsiPackageType";
-            "productCode"    = "$MsiProductCode";
-            "productName"    = "$MsiProductName";
-            "productVersion" = "$MsiProductVersion";
-            "publisher"      = "$MsiPublisher";
-            "requiresReboot" = "$MsiRequiresReboot";
+            "packageType"    = "$MsiPackageType"
+            "productCode"    = "$MsiProductCode"
+            "productName"    = "$MsiProductName"
+            "productVersion" = "$MsiProductVersion"
+            "publisher"      = "$MsiPublisher"
+            "requiresReboot" = "$MsiRequiresReboot"
             "upgradeCode"    = "$MsiUpgradeCode"
-        };
-        $body.notes = "";
-        $body.owner = "";
-        $body.privacyInformationUrl = $null;
-        $body.publisher = $publisher;
-        $body.runAs32bit = $false;
-        $body.setupFilePath = $SetupFileName;
+        }
+        $body.notes = ""
+        $body.owner = ""
+        $body.privacyInformationUrl = $null
+        $body.publisher = $publisher
+        $body.runAs32bit = $false
+        $body.setupFilePath = $SetupFileName
         $body.uninstallCommandLine = "msiexec /x `"$MsiProductCode`""
         
     }
         
     elseif ($EXE) {
         
-        $body = @{ "@odata.type" = "#microsoft.graph.win32LobApp" };
-        $body.description = $description;
-        $body.developer = "";
-        $body.displayName = $displayName;
-        $body.fileName = $filename;
+        $body = @{ "@odata.type" = "#microsoft.graph.win32LobApp" }
+        $body.description = $description
+        $body.developer = ""
+        $body.displayName = $displayName
+        $body.fileName = $filename
         $body.installCommandLine = "$installCommandLine"
-        $body.installExperience = @{"runAsAccount" = "$installExperience" };
-        $body.informationUrl = $null;
-        $body.isFeatured = $false;
-        $body.minimumSupportedOperatingSystem = @{"v10_1607" = $true };
-        $body.msiInformation = $null;
-        $body.notes = "";
-        $body.owner = "";
-        $body.privacyInformationUrl = $null;
-        $body.publisher = $publisher;
-        $body.runAs32bit = $false;
-        $body.setupFilePath = $SetupFileName;
+        $body.installExperience = @{"runAsAccount" = "$installExperience" }
+        $body.informationUrl = $null
+        $body.isFeatured = $false
+        $body.minimumSupportedOperatingSystem = @{"v10_1607" = $true }
+        $body.msiInformation = $null
+        $body.notes = ""
+        $body.owner = ""
+        $body.privacyInformationUrl = $null
+        $body.publisher = $publisher
+        $body.runAs32bit = $false
+        $body.setupFilePath = $SetupFileName
         $body.uninstallCommandLine = "$uninstallCommandLine"
         
     }
         
-    $body;
+    $body
 }
         
 ####################################################
         
 function GetAppFileBody($name, $size, $sizeEncrypted, $manifest) {
         
-    $body = @{ "@odata.type" = "#microsoft.graph.mobileAppContentFile" };
-    $body.name = $name;
-    $body.size = $size;
-    $body.sizeEncrypted = $sizeEncrypted;
-    $body.manifest = $manifest;
-    $body.isDependency = $false;
+    $body = @{ "@odata.type" = "#microsoft.graph.mobileAppContentFile" }
+    $body.name = $name
+    $body.size = $size
+    $body.sizeEncrypted = $sizeEncrypted
+    $body.manifest = $manifest
+    $body.isDependency = $false
         
-    $body;
+    $body
 }
         
 ####################################################
         
 function GetAppCommitBody($contentVersionId, $LobType) {
         
-    $body = @{ "@odata.type" = "#$LobType" };
-    $body.committedContentVersion = $contentVersionId;
+    $body = @{ "@odata.type" = "#$LobType" }
+    $body.committedContentVersion = $contentVersionId
         
-    $body;
+    $body
         
 }
         
@@ -528,8 +529,7 @@ Function Test-SourceFile() {
         
         if (!(test-path "$SourceFile")) {
         
-            Write-Host
-            Write-Host "Source File '$sourceFile' doesn't exist..." -ForegroundColor Red
+            Write-Error "Source File '$sourceFile' doesn't exist..."
             throw
         
         }
@@ -538,8 +538,7 @@ Function Test-SourceFile() {
         
     catch {
         
-        Write-Host -ForegroundColor Red $_.Exception.Message;
-        Write-Host
+        Write-Error $_.Exception.Message
         break
         
     }
@@ -623,40 +622,38 @@ Function New-DetectionRule() {
         
         if (!(Test-Path "$ScriptFile")) {
                     
-            Write-Host
-            Write-Host "Could not find file '$ScriptFile'..." -ForegroundColor Red
-            Write-Host "Script can't continue..." -ForegroundColor Red
-            Write-Host
+            Write-Error "Could not find file '$ScriptFile'..."
+            Write-Error "Script can't continue..."
             break
         
         }
                 
-        $ScriptContent = [System.Convert]::ToBase64String([System.IO.File]::ReadAllBytes("$ScriptFile"));
+        $ScriptContent = [System.Convert]::ToBase64String([System.IO.File]::ReadAllBytes("$ScriptFile"))
                 
         $DR = @{ "@odata.type" = "#microsoft.graph.win32LobAppPowerShellScriptDetection" }
-        $DR.enforceSignatureCheck = $false;
-        $DR.runAs32Bit = $false;
-        $DR.scriptContent = "$ScriptContent";
+        $DR.enforceSignatureCheck = $false
+        $DR.runAs32Bit = $false
+        $DR.scriptContent = "$ScriptContent"
         
     }
             
     elseif ($MSI) {
             
         $DR = @{ "@odata.type" = "#microsoft.graph.win32LobAppProductCodeDetection" }
-        $DR.productVersionOperator = "notConfigured";
-        $DR.productCode = "$MsiProductCode";
-        $DR.productVersion = $null;
+        $DR.productVersionOperator = "notConfigured"
+        $DR.productCode = "$MsiProductCode"
+        $DR.productVersion = $null
         
     }
         
     elseif ($File) {
             
         $DR = @{ "@odata.type" = "#microsoft.graph.win32LobAppFileSystemDetection" }
-        $DR.check32BitOn64System = "$check32BitOn64System";
-        $DR.detectionType = "$FileDetectionType";
-        $DR.detectionValue = $FileDetectionValue;
-        $DR.fileOrFolderName = "$FileOrFolderName";
-        $DR.operator = "notConfigured";
+        $DR.check32BitOn64System = "$check32BitOn64System"
+        $DR.detectionType = "$FileDetectionType"
+        $DR.detectionValue = $FileDetectionValue
+        $DR.fileOrFolderName = "$FileOrFolderName"
+        $DR.operator = "notConfigured"
         $DR.path = "$Path"
         
     }
@@ -664,11 +661,11 @@ Function New-DetectionRule() {
     elseif ($Registry) {
             
         $DR = @{ "@odata.type" = "#microsoft.graph.win32LobAppRegistryDetection" }
-        $DR.check32BitOn64System = "$check32BitRegOn64System";
-        $DR.detectionType = "$RegistryDetectionType";
-        $DR.detectionValue = "";
-        $DR.keyPath = "$RegistryKeyPath";
-        $DR.operator = "notConfigured";
+        $DR.check32BitOn64System = "$check32BitRegOn64System"
+        $DR.detectionType = "$RegistryDetectionType"
+        $DR.detectionValue = ""
+        $DR.keyPath = "$RegistryKeyPath"
+        $DR.operator = "notConfigured"
         $DR.valueName = "$RegistryValue"
         
     }
@@ -848,10 +845,10 @@ function Invoke-UploadWin32Lob() {
         
         $LOBType = "microsoft.graph.win32LobApp"
         
-        Write-Host "Testing if SourceFile '$SourceFile' Path is valid..." -ForegroundColor Yellow
+        Write-Verbose "Testing if SourceFile '$SourceFile' Path is valid..."
         Test-SourceFile "$SourceFile"
                 
-        Write-Host "Creating JSON data to pass to the service..." -ForegroundColor Yellow
+        Write-Verbose "Creating JSON data to pass to the service..."
         
         # Funciton to read Win32LOB file
         $DetectionXML = Get-IntuneWinXML "$SourceFile" -fileName "detection.xml"
@@ -870,7 +867,7 @@ function Invoke-UploadWin32Lob() {
         
             # MSI
             $MsiExecutionContext = $DetectionXML.ApplicationInfo.MsiInfo.MsiExecutionContext
-            $MsiPackageType = "DualPurpose";
+            $MsiPackageType = "DualPurpose"
             if ($MsiExecutionContext -eq "System") { $MsiPackageType = "PerMachine" }
             elseif ($MsiExecutionContext -eq "User") { $MsiPackageType = "PerUser" }
         
@@ -912,10 +909,8 @@ function Invoke-UploadWin32Lob() {
         
         if ($DetectionRules.'@odata.type' -contains "#microsoft.graph.win32LobAppPowerShellScriptDetection" -and @($DetectionRules).'@odata.type'.Count -gt 1) {
         
-            Write-Host
             Write-Warning "A Detection Rule can either be 'Manually configure detection rules' or 'Use a custom detection script'"
             Write-Warning "It can't include both..."
-            Write-Host
             break
         
         }
@@ -940,29 +935,29 @@ function Invoke-UploadWin32Lob() {
             break
         }
         
-        Write-Host "Creating application in Intune..." -ForegroundColor Yellow
+        Write-Verbose "Creating application in Intune..."
         $mobileApp = New-MgDeviceAppManagementMobileApp -BodyParameter ($mobileAppBody | ConvertTo-Json)
         
         # Get the content version for the new app (this will always be 1 until the new app is committed).
-        Write-Host "Creating Content Version in the service for the application..." -ForegroundColor Yellow
-        $appId = $mobileApp.id;
-        $contentVersionUri = "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/$appId/$LOBType/contentVersions";
+        Write-Verbose "Creating Content Version in the service for the application..."
+        $appId = $mobileApp.id
+        $contentVersionUri = "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/$appId/$LOBType/contentVersions"
         $contentVersion = Invoke-MgGraphRequest -method POST -Uri $contentVersionUri -Body "{}"
         
         # Encrypt file and Get File Information
-        Write-Host "Getting Encryption Information for '$SourceFile'..." -ForegroundColor Yellow
+        Write-Verbose "Getting Encryption Information for '$SourceFile'..."
         
-        $encryptionInfo = @{};
+        $encryptionInfo = @{}
         $encryptionInfo.encryptionKey = $DetectionXML.ApplicationInfo.EncryptionInfo.EncryptionKey
         $encryptionInfo.macKey = $DetectionXML.ApplicationInfo.EncryptionInfo.macKey
         $encryptionInfo.initializationVector = $DetectionXML.ApplicationInfo.EncryptionInfo.initializationVector
         $encryptionInfo.mac = $DetectionXML.ApplicationInfo.EncryptionInfo.mac
-        $encryptionInfo.profileIdentifier = "ProfileVersion1";
+        $encryptionInfo.profileIdentifier = "ProfileVersion1"
         $encryptionInfo.fileDigest = $DetectionXML.ApplicationInfo.EncryptionInfo.fileDigest
         $encryptionInfo.fileDigestAlgorithm = $DetectionXML.ApplicationInfo.EncryptionInfo.fileDigestAlgorithm
         
-        $fileEncryptionInfo = @{};
-        $fileEncryptionInfo.fileEncryptionInfo = $encryptionInfo;
+        $fileEncryptionInfo = @{}
+        $fileEncryptionInfo.fileEncryptionInfo = $encryptionInfo
         
         # Extracting encrypted file
         $IntuneWinFile = Get-IntuneWinFile "$SourceFile" -fileName "$filename"
@@ -971,42 +966,41 @@ function Invoke-UploadWin32Lob() {
         $EncrySize = (Get-Item "$IntuneWinFile").Length
         
         # Create a new file for the app.
-        Write-Host "Creating a new file entry in Azure for the upload..." -ForegroundColor Yellow
-        $contentVersionId = $contentVersion.id;
-        $fileBody = GetAppFileBody "$FileName" $Size $EncrySize $null;
-        $filesUri = "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/$appId/$LOBType/contentVersions/$contentVersionId/files";
+        Write-Verbose "Creating a new file entry in Azure for the upload..."
+        $contentVersionId = $contentVersion.id
+        $fileBody = GetAppFileBody "$FileName" $Size $EncrySize $null
+        $filesUri = "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/$appId/$LOBType/contentVersions/$contentVersionId/files"
         $file = Invoke-MgGraphRequest -Method POST -Uri $filesUri -Body ($fileBody | ConvertTo-Json)
             
         # Wait for the service to process the new file request.
-        Write-Host "Waiting for the file entry URI to be created..." -ForegroundColor Yellow
-        $fileId = $file.id;
-        $fileUri = "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/$appId/$LOBType/contentVersions/$contentVersionId/files/$fileId";
-        $file = Start-WaitForFileProcessing $fileUri "AzureStorageUriRequest";
+        Write-Verbose "Waiting for the file entry URI to be created..."
+        $fileId = $file.id
+        $fileUri = "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/$appId/$LOBType/contentVersions/$contentVersionId/files/$fileId"
+        $file = Start-WaitForFileProcessing $fileUri "AzureStorageUriRequest"
         
         # Upload the content to Azure Storage.
-        Write-Host "Uploading file to Azure Storage..." -f Yellow
+        Write-Verbose "Uploading file to Azure Storage..."
         
-        UploadFileToAzureStorage $file.azureStorageUri "$IntuneWinFile" $fileUri;
+        UploadFileToAzureStorage $file.azureStorageUri "$IntuneWinFile" $fileUri
         
         # Need to Add removal of IntuneWin file
         Remove-Item "$IntuneWinFile" -Force
         
         # Commit the file.
-        Write-Host "Committing the file into Azure Storage..." -ForegroundColor Yellow
-        $commitFileUri = "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/$appId/$LOBType/contentVersions/$contentVersionId/files/$fileId/commit";
+        Write-Verbose "Committing the file into Azure Storage..."
+        $commitFileUri = "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/$appId/$LOBType/contentVersions/$contentVersionId/files/$fileId/commit"
         Invoke-MgGraphRequest -Uri $commitFileUri -Method POST -Body ($fileEncryptionInfo | ConvertTo-Json)
         
         # Wait for the service to process the commit file request.
-        Write-Host "Waiting for the service to process the commit file request..." -ForegroundColor Yellow
-        $file = Start-WaitForFileProcessing $fileUri "CommitFile";
+        Write-Verbose "Waiting for the service to process the commit file request..."
+        $file = Start-WaitForFileProcessing $fileUri "CommitFile"
         
         # Commit the app.
-        Write-Host "Committing the file into Azure Storage..." -ForegroundColor Yellow
-        $commitAppUri = "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/$appId";
-        $commitAppBody = GetAppCommitBody $contentVersionId $LOBType;
+        Write-Verbose "Committing the file into Azure Storage..."
+        $commitAppUri = "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/$appId"
+        $commitAppBody = GetAppCommitBody $contentVersionId $LOBType
         Invoke-MgGraphRequest -Method PATCH -Uri $commitAppUri -Body ($commitAppBody | ConvertTo-Json)
         
-        Write-Host "Sleeping for $sleep seconds to allow patch completion..." -f Magenta
         foreach ($i in 0..$sleep) {
             Write-Progress -Activity "Sleeping for $($sleep-$i) seconds" -PercentComplete ($i / $sleep * 100) -SecondsRemaining ($sleep - $i)
             Start-Sleep -s 1
@@ -1014,16 +1008,16 @@ function Invoke-UploadWin32Lob() {
     }
             
     catch {
-        Write-Host -ForegroundColor Red "Aborting with exception: $($_.Exception.ToString())";
+        Write-Error "Aborting with exception: $($_.Exception.ToString())"
             
     }
 }
         
-$logRequestUris = $true;
-$logHeaders = $false;
-$logContent = $true;
+$logRequestUris = $true
+$logHeaders = $false
+$logContent = $true
         
-$azureStorageUploadChunkSizeInMb = 6l;
+$azureStorageUploadChunkSizeInMb = 6l
         
 $sleep = 30
         
@@ -1042,22 +1036,21 @@ Function Get-IntuneApplication() {
         #>            
     try {
 
-        Get-MgDeviceAppManagementMobileApp -All | Where-Object { (!($_.AdditionalProperties['@odata.type']).Contains("managed")) }
+        return Get-MgDeviceAppManagementMobileApp -All | Where-Object { (!($_.AdditionalProperties['@odata.type']).Contains("managed")) }
         
     }
             
     catch {
         
         $ex = $_.Exception
-        Write-Host "Request to $Uri failed with HTTP Status $([int]$ex.Response.StatusCode) $($ex.Response.StatusDescription)" -f Red
+        Write-Verbose "Request to $Uri failed with HTTP Status $([int]$ex.Response.StatusCode) $($ex.Response.StatusDescription)"
         $errorResponse = $ex.Response.GetResponseStream()
         $reader = New-Object System.IO.StreamReader($errorResponse)
         $reader.BaseStream.Position = 0
         $reader.DiscardBufferedData()
         $responseBody = $reader.ReadToEnd();
-        Write-Host "Response content:`n$responseBody" -f Red
+        Write-Verbose "Response content:`n$responseBody"
         Write-Error "Request to $Uri failed with HTTP Status $($ex.Response.StatusCode) $($ex.Response.StatusDescription)"
-        write-host
         break
         
     }
@@ -1381,11 +1374,11 @@ Function Install-WinGetPackage {
             $Result = ""
         }
         elseif ($Result.count -lt 1) {
-            Write-Host "Unable to locate package for installation"
+            Write-Error "Unable to locate package for installation"
             $Result = ""
         }
         else {
-            Write-Host "Multiple packages found matching input criteria. Please refine the input."
+            Write-Error "Multiple packages found matching input criteria. Please refine the input."
         }
     }
     END {
@@ -1750,11 +1743,11 @@ Function Uninstall-WinGetPackage {
             $Result = ""
         }
         elseif ($Result.count -lt 1) {
-            Write-Host "Unable to locate package for uninstallation"
+            Write-Error "Unable to locate package for uninstallation"
             $Result = ""
         }
         else {
-            Write-Host "Multiple packages found matching input criteria. Please refine the input."
+            Write-Error "Multiple packages found matching input criteria. Please refine the input."
         }
     }
     END {
@@ -1931,11 +1924,11 @@ Function Update-WinGetPackage {
             $Result = ""
         }
         elseif ($Result.count -lt 1) {
-            Write-Host "Unable to locate package for installation"
+            Write-Error "Unable to locate package for installation"
             $Result = ""
         }
         else {
-            Write-Host "Multiple packages found matching input criteria. Please refine the input."
+            Write-Error "Multiple packages found matching input criteria. Please refine the input."
         }
     }
     END {
@@ -2380,87 +2373,91 @@ function new-win32app {
 ######                          END FUNCTIONS SECTION                                               ########
 ############################################################################################################
 
-Write-Host "Connecting to Microsoft Graph"
+Write-Verbose "Connecting to Microsoft Graph"
 Select-MgProfile -Name Beta
 Connect-MgGraph -Scopes DeviceManagementApps.ReadWrite.All, DeviceManagementConfiguration.ReadWrite.All, Group.ReadWrite.All, GroupMember.ReadWrite.All, openid, profile, email, offline_access
-Write-Host "Graph connection established" -ForegroundColor DarkGreen
+Write-Verbose "Graph connection established"
 
-Write-Host "Loading Winget Packages"
+Write-Progress "Loading Winget Packages" -PercentComplete 1
 
-find-wingetpackage '""' | out-gridview -PassThru -Title "Available Applications" | ForEach-Object {
+$packs = find-wingetpackage '""'
+
+Write-Progress "Loading Winget Packages" -Completed
+
+$packs | out-gridview -PassThru -Title "Available Applications" | ForEach-Object {
     $appid = $_.Id.Trim()
     $appname = $_.Name.Trim()
 
-    write-host "$appname Selected with ID of $appid"
+    Write-Verbose "$appname Selected with ID of $appid"
 
 
     ##Create Directory
-    write-host "Creating Directory for $appname"
+    Write-Verbose "Creating Directory for $appname"
     $apppath = "$path\$appname"
     new-item -Path $apppath -ItemType Directory -Force
-    write-host "Directory $apppath Created" -ForegroundColor DarkGreen
+    Write-Infomation "Directory $apppath Created"
 
     ##Create Groups
-    write-host "Creating AAD Groups for $appname"
+    Write-Verbose "Creating AAD Groups for $appname"
     $installgroup = new-aadgroups -appname $appname -grouptype "Install"
     $uninstallgroup = new-aadgroups -appname $appname -grouptype "Uninstall"
-    write-host "Created $installgroup for installing $appname" -ForegroundColor DarkGreen
-    write-host "Created $uninstallgroup for uninstalling $appname" -ForegroundColor DarkGreen
+    Write-Information "Created $installgroup for installing $appname"
+    Write-Information "Created $uninstallgroup for uninstalling $appname"
 
     ##Create Install Script
-    write-host "Creating Install Script for $appname"
+    Write-Verbose "Creating Install Script for $appname"
     $installscript = new-installscript -appid $appid -appname $appname
     $installfilename = "install$appname.ps1"
     $installscriptfile = $apppath + "\" + $installfilename
     $installscript | Out-File $installscriptfile
-    write-host "Script created at $installscriptfile" -ForegroundColor DarkGreen
+    Write-Information "Script created at $installscriptfile"
 
     ##Create Uninstall Script
-    write-host "Creating Uninstall Script for $appname"
+    Write-Verbose "Creating Uninstall Script for $appname"
     $uninstallscript = new-uninstallscript -appid $appid -appname $appname
     $uninstallfilename = "uninstall$appname.ps1"
     $uninstallscriptfile = $apppath + "\" + $uninstallfilename
     $uninstallscript | Out-File $uninstallscriptfile
-    write-host "Script created at $uninstallscriptfile" -ForegroundColor DarkGreen
+    Write-Information "Script created at $uninstallscriptfile"
 
     ##Create Detection Script
-    write-host "Creating Detection Script for $appname"
+    Write-Verbose "Creating Detection Script for $appname"
     $detectionscript = new-detectionscript -appid $appid -appname $appname
     $detectionscriptfile = $apppath + "\detection$appname.ps1"
     $detectionscript | Out-File $detectionscriptfile
-    write-host "Script created at $detectionscriptfile" -ForegroundColor DarkGreen
+    Write-Information "Script created at $detectionscriptfile"
 
 
     ##Create Proac
-    write-host "Creation Proactive Remediation for $appname"
+    Write-Verbose "Creation Proactive Remediation for $appname"
     new-proac -appid $appid -appname $appname -groupid $installgroup
-    write-host "Proactive Remediation Created and Assigned for $appname" -ForegroundColor DarkGreen
+    Write-Information "Proactive Remediation Created and Assigned for $appname"
 
     ##Create IntuneWin
-    write-host "Creating Intunewin File for $appname"
+    Write-Verbose "Creating Intunewin File for $appname"
     $intunewinpath = $apppath + "\install$appname.intunewin"
     new-intunewinfile -appid $appid -appname $appname -apppath $apppath -setupfilename $installscriptfile
-    write-host "Intunewin $intunewinpath Created" -ForegroundColor DarkGreen
+    Write-Information "Intunewin $intunewinpath Created"
     $sleep = 10
     foreach ($i in 0..$sleep) {
         Write-Progress -Activity "Sleeping for $($sleep-$i) seconds" -PercentComplete ($i / $sleep * 100) -SecondsRemaining ($sleep - $i)
         Start-Sleep -s 1
     }
     ##Create and upload Win32
-    write-host "Uploading $appname to Intune"
+    Write-Verbose "Uploading $appname to Intune"
     $installcmd = "powershell.exe -ExecutionPolicy Bypass -File $installfilename"
     $uninstallcmd = "powershell.exe -ExecutionPolicy Bypass -File $uninstallfilename"
     new-win32app -appid $appid -appname $appname -appfile $intunewinpath -installcmd $installcmd -uninstallcmd $uninstallcmd -detectionfile $detectionscriptfile
-    write-host "$appname Created and uploaded" -ForegroundColor DarkGreen
+    Write-Information "$appname Created and uploaded"
 
     ##Assign Win32
-    write-host "Assigning Groups"
+    Write-Verbose "Assigning Groups"
     grant-win32app -appname $appname -installgroup $installgroup -uninstallgroup $uninstallgroup
-    write-host "Assigned $installgroup as Required Install to $appname" -ForegroundColor DarkGreen
-    write-host "Assigned $uninstallgroup as Required Uninstall to $appname" -ForegroundColor DarkGreen
+    Write-Information "Assigned $installgroup as Required Install to $appname"
+    Write-Information "Assigned $uninstallgroup as Required Uninstall to $appname"
 
     ##Done
-    write-host "$appname packaged and deployed" -ForegroundColor DarkGreen
+    Write-Information "$appname packaged and deployed"
 
 }
 Disconnect-MgGraph | Out-Null
