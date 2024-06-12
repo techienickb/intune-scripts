@@ -1,0 +1,1 @@
+Remediation to remove zoom from the user context

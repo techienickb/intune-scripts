@@ -1,0 +1,10 @@
+<SkypeSettings>
+  <Theming>
+       <ThemeName>Custom</ThemeName>
+       <CustomBackgroundMainFoRDisplay>2023ThemingTemplateMicrosoftTeamsRoom.jpg</CustomBackgroundMainFoRDisplay>
+       <CustomBackgroundExtendedFoRDisplay>2023ThemingTemplateMicrosoftTeamsRoom.jpg</CustomBackgroundExtendedFoRDisplay>
+       <CustomBackgroundConsole>Tablet.jpg</CustomBackgroundConsole>
+       <CustomThemeImageUrl>2023ThemingTemplateMicrosoftTeamsRoom.jpg</CustomThemeImageUrl>
+  </Theming>
+<CortanaWakewordEnabled>False</CortanaWakewordEnabled>
+</SkypeSettings>

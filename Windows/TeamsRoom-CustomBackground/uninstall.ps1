@@ -1,0 +1,2 @@
+Remove-Item C:\Users\Skype\AppData\Local\Packages\Microsoft.SkypeRoomSystem_8wekyb3d8bbwe\LocalState\tablet.jpg -Force -Confirm:$false
+Remove-Item C:\Users\Skype\AppData\Local\Packages\Microsoft.SkypeRoomSystem_8wekyb3d8bbwe\LocalState\2023ThemingTemplateMicrosoftTeamsRoom.jpg -Force -Confirm:$false
