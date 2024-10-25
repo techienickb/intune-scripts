@@ -1,7 +1,7 @@
-#Source: https://github.com/Eduserv/intune-scripts
+#Source: https://github.com/techienickb/intune-scripts
 
-$Path_local = "$Env:Programfiles\_MEM"
-Start-Transcript -Path "$Path_local\Log\AppX-install.log" -Force
+$Path_local = "$Env:Programdata\Microsoft\IntuneManagementExtension\Logs"
+Start-Transcript -Path "$Path_local\AppX-install.log" -Force
 
 $removeList = 'Microsoft.GamingApp', 'MicrosoftCorporationII.QuickAssist', 'Microsoft.MicrosoftSolitaireCollection', 'Microsoft.MixedReality.Portal', 'Microsoft.MicrosoftOfficeHub', 'Microsoft.Xbox', 'Microsoft.SkypeApp', 'Microsoft.People', 'microsoft.windowscommunicationsapps', 'MicrosoftTeams', 'MicrosoftCorporationII.MicrosoftFamily', 'Microsoft.MSPaint', 'Microsoft.Microsoft3DViewer', 'Microsoft.Windows.DevHome'
 
