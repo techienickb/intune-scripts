@@ -41,11 +41,11 @@ else
     mkdir -p $logandmetadir
 fi
 
-# start logging
+# wipe log & start logging
+> $log
 exec 1>> $log 2>&1
 
 # Begin Script Body
-
 echo ""
 echo "#########################################################################"
 echo "# $(date) | Starting $scriptname"
@@ -64,7 +64,7 @@ serial=$(system_profiler SPHardwareDataType | awk '/Serial/ {print $4}')
 #generate data for keyvault
 data="{\"value\":\"$p\"}"
 #put password in keyvault
-curl -X PUT -H "Authorization: Bearer $token" -H "Content-Type: application/json" "https://$keyvaultname.vault.azure.net/secrets/$adminaccountname-$serial?api-version=7.4" -d "$data"
+curl -X PUT -H "Authorization: Bearer $token" -H "Content-Type: application/json" "https://$keyvaultname.vault.azure.net/secrets/$adminaccountname-$serial?api-version=7.4" -d "$data" &> /dev/null 2>&1
 
 echo ""
 
@@ -74,4 +74,4 @@ sudo defaults write /Library/Preferences/com.apple.loginwindow HiddenUsersList -
 sudo sysadminctl -deleteUser "$adminaccountname" # Remove existing admin account if it exists
 sudo sysadminctl -adminUser "$adminaccountname" -adminPassword "$p" -addUser "$adminaccountname" -fullName "$adminaccountfullname" -password "$p" -admin
 
-echo "IT Admin Account Created"
+echo "Local Admin Account Created"
