@@ -1,0 +1,1 @@
+Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Secureboot\" -Name "MicrosoftUpdateManagedOptIn" -Value 0x5944 -Force
